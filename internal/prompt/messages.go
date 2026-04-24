@@ -38,6 +38,7 @@ func MessagesPrepareWithThinking(messages []map[string]any, thinkingEnabled bool
 	for _, m := range messages {
 		role, _ := m["role"].(string)
 		text := NormalizeContent(m["content"])
+		text = sanitizeInputTokens(text)
 		processed = append(processed, block{Role: role, Text: text})
 	}
 	if len(processed) == 0 {
@@ -93,15 +94,23 @@ func formatRoleBlock(marker, text, endMarker string) string {
 	return out
 }
 
+// sanitizeInputTokens prevents user-supplied text from being misinterpreted as
+// DeepSeek control tokens. It only escapes the opening bracket pattern "<｜"
+// by inserting a zero-width space, which breaks token recognition while
+// remaining invisible to readers. ds2api's own structural markers placed
+// by formatRoleBlock() are NOT affected since they are applied after this step.
+func sanitizeInputTokens(text string) string {
+	if text == "" {
+		return text
+	}
+	return strings.ReplaceAll(text, "<｜", "<｜\u200B")
+}
+
 func buildConversationContinuityInstructions(thinkingEnabled bool) string {
-	lines := []string{
-		"Continue the conversation from the full prior context and the latest tool results.",
-		"Treat earlier messages as binding context; answer the user's current request as a continuation, not a restart.",
-	}
-	if thinkingEnabled {
-		lines = append(lines, "Keep reasoning internal. Do not leave the final user-facing answer only in reasoning; always provide the answer in visible assistant content.")
-	}
-	return strings.Join(lines, "\n")
+	// Removed: Previously injected a hardcoded English instruction block that
+	// served as a unique fingerprint identifiable by DeepSeek backend.
+	// The thinking model already handles context continuation natively.
+	return ""
 }
 
 func NormalizeContent(v any) string {
